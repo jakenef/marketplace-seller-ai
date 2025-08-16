@@ -55,6 +55,22 @@ export interface DraftReply {
   icsPath?: string;
 }
 
+export interface SellerContext {
+  sellerName: string;
+  itemName: string;
+  description: string;
+  condition: string;
+  targetPrice: number;
+  lowestPrice: number;
+  sellTimeFrame: 'one day' | 'one week' | 'one month';
+  meetingLocation: string;
+}
+
+export interface SystemPromptContext {
+  sellerContext: SellerContext;
+  conversationHistory: BuyerMessage[];
+}
+
 export interface Appointment {
   id: UUID;
   listingId: UUID;

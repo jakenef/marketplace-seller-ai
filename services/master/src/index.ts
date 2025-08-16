@@ -112,6 +112,12 @@ app.post('/mode', (req, res) => {
   }
 });
 
+// Clear conversation histories (for testing)
+app.post('/debug/clear-histories', (req, res) => {
+  masterAgent.clearConversationHistories();
+  res.json({ ok: true, message: 'All conversation histories cleared' });
+});
+
 app.listen(port, () => {
   console.log(`Master service running on port ${port}`);
 });

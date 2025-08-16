@@ -12,6 +12,7 @@ interface ChatPanelProps {
 export default function ChatPanel({ selectedThread, mode }: ChatPanelProps) {
   const [messages, setMessages] = useState<(BuyerMessage | DraftReply & { type: 'draft' })[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
 
   useEffect(() => {
     if (selectedThread) {
@@ -34,6 +35,45 @@ export default function ChatPanel({ selectedThread, mode }: ChatPanelProps) {
       console.error('Failed to process message:', error);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedThread || isProcessing) return;
+    
+    // Create new buyer message
+    const buyerMessage: BuyerMessage = {
+      id: `msg-${Date.now()}`,
+      listingId: selectedThread.messages[0]?.listingId || `listing-${Date.now()}`,
+      buyerId: `buyer-${Date.now()}`,
+      text: newMessage.trim(),
+      ts: new Date().toISOString(),
+      source: 'mock'
+    };
+
+    // Add message to chat immediately
+    setMessages(prev => [...prev, { ...buyerMessage, type: 'buyer' as const }]);
+    setNewMessage('');
+    
+    // Process the message to get AI response
+    setIsProcessing(true);
+    try {
+      const response = await apiClient.processMessage(buyerMessage);
+      
+      if (response.data) {
+        setMessages(prev => [...prev, { ...response.data!, type: 'draft' }]);
+      }
+    } catch (error) {
+      console.error('Failed to process message:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
@@ -153,6 +193,54 @@ export default function ChatPanel({ selectedThread, mode }: ChatPanelProps) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Message Input */}
+      <div className="bg-white border-t border-gray-200 p-4">
+        <div className="flex items-end space-x-3">
+          <div className="flex-1">
+            <label htmlFor="message-input" className="sr-only">
+              Type your message as a buyer
+            </label>
+            <textarea
+              id="message-input"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Type your message as a buyer..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={1}
+              disabled={isProcessing}
+              style={{
+                minHeight: '40px',
+                maxHeight: '120px',
+                resize: 'none'
+              }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+              }}
+            />
+          </div>
+          <button
+            onClick={handleSendMessage}
+            disabled={!newMessage.trim() || isProcessing}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isProcessing ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Sending...</span>
+              </div>
+            ) : (
+              'Send'
+            )}
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          Press Enter to send • Shift+Enter for new line
+        </div>
       </div>
     </div>
   );
