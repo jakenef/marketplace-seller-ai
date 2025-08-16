@@ -81,3 +81,37 @@ export interface Appointment {
   status: 'proposed' | 'confirmed' | 'cancelled';
   icsPath?: string;
 }
+
+// --- Calendar endpoint contracts ---
+export interface SuggestSlotsRequest {
+  listing: Listing;
+  windowCount?: number;   // default: 2
+  durationMin?: number;   // default: 45
+}
+
+export interface SuggestSlotsResponse {
+  suggested: string[];    // ISO start times
+}
+
+export interface CreateAppointmentRequest {
+  listing: Pick<Listing, "id" | "title" | "paymentMethods">;
+  buyerId: UUID;
+  startIso: string;
+  spot: string;
+  durationMin?: number;   // default: 45
+  buyerEmail?: string;    // optional: invite buyer
+}
+
+// Keep your existing Appointment as-is, but for the API response
+// it's handy to include Google event info (non-breaking: new optional fields)
+export interface CreateAppointmentResponse extends Appointment {
+  eventId?: string;       // Google Calendar event id
+  htmlLink?: string;      // Google Calendar UI link
+}
+
+// --- Optional: surface auth status (used when calendar needs connect) ---
+export interface CalendarAuthStatus {
+  needsAuth: boolean;
+  authUrl?: string;       // e.g., "/auth/google"
+  reason?: string;        // optional message for UI
+}
