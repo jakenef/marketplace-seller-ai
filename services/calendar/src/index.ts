@@ -121,6 +121,16 @@ app.post('/events', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({ 
+    status: 'ok', 
+    service: 'calendar',
+    timestamp: new Date().toISOString(),
+    authenticated: !!(oauth2Client as any).credentials?.access_token
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Calendar server running on port ${PORT}`);
 });
