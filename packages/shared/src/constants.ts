@@ -5,3 +5,6 @@ export const MEET_SPOTS_PROVO = [
   'Marriott Center lot',
   'Provo Rec Center',
 ];
+
+export const DEFAULT_SLOT_MIN = 15;
+export const DEFAULT_SUGGESTED_SLOTS = 2;
