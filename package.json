@@ -1,0 +1,34 @@
+{
+  "name": "upseller-monorepo",
+  "version": "1.0.0",
+  "description": "AI assistant for Facebook Marketplace sellers",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:all": "concurrently \"npm:dev:master\" \"npm:dev:messenger\" \"npm:dev:calendar\" \"npm:dev:web\"",
+    "dev:master": "npm run -w services/master dev",
+    "dev:messenger": "npm run -w services/messenger dev",
+    "dev:calendar": "npm run -w services/calendar dev",
+    "dev:web": "npm run -w apps/web dev",
+    "typecheck": "tsc -b --verbose",
+    "lint": "eslint .",
+    "build": "npm run -w packages/shared build && npm run -w services/master build && npm run -w services/messenger build && npm run -w services/calendar build && npm run -w apps/web build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "concurrently": "^8.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
