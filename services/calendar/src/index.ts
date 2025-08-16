@@ -1,97 +1,88 @@
 import express from 'express';
-import cors from 'cors';
+import { google } from 'googleapis';
 import dotenv from 'dotenv';
-import * as path from 'path';
-import { Listing, Appointment, UUID, TIMEZONE } from '@upseller/shared';
-import { ICSGenerator } from './utils/icsGenerator';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 4002;
+const PORT = process.env.PORT || 4002;
 
-app.use(cors());
 app.use(express.json());
 
-// Serve static ICS files
-app.use('/ics', express.static(path.join(__dirname, '../ics')));
+// Google Calendar setup
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
 
-// In-memory storage for demo
-const appointments: Appointment[] = [];
+const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'calendar' });
+// 1. Test Google Account Connection
+app.get('/auth', (req, res) => {
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/calendar']
+  });
+  res.json({ authUrl });
 });
 
-// Suggest time slots
-app.post('/suggest-slots', (req, res) => {
-  const { listing, windowCount = 2 } = req.body;
-  
-  // Generate suggested time slots based on current time
-  const now = new Date();
-  const suggested: string[] = [];
-  
-  // Suggest slots starting 2 hours from now, spaced 45 minutes apart
-  for (let i = 0; i < windowCount; i++) {
-    const slotTime = new Date(now.getTime() + (2 * 60 + i * 45) * 60 * 1000);
-    suggested.push(slotTime.toISOString());
-  }
-  
-  res.json({ suggested });
-});
-
-// Create appointment
-app.post('/create-appointment', async (req, res) => {
+app.get('/auth/google/callback', async (req, res) => {
+  const { code } = req.query;
   try {
-    const { listing, buyerId, startIso, spot } = req.body;
-    
-    // Calculate end time (45 minutes later)
-    const startTime = new Date(startIso);
-    const endTime = new Date(startTime.getTime() + 45 * 60 * 1000);
-    
-    const appointment: Appointment = {
-      id: `appt-${Date.now()}` as UUID,
-      listingId: listing.id,
-      buyerId,
-      startIso: startTime.toISOString(),
-      endIso: endTime.toISOString(),
-      spot,
-      status: 'proposed',
-    };
-    
-    // Generate ICS file
-    const icsPath = await ICSGenerator.createAppointmentICS(appointment);
-    appointment.icsPath = icsPath;
-    
-    appointments.push(appointment);
-    
-    res.json(appointment);
+    const { tokens } = await oauth2Client.getToken(code as string);
+    oauth2Client.setCredentials(tokens);
+    res.json({ message: 'Authentication successful', tokens });
   } catch (error) {
-    console.error('Error creating appointment:', error);
-    res.status(500).json({ error: 'Failed to create appointment' });
+    res.status(400).json({ error: 'Authentication failed', details: error });
   }
 });
 
-// Get appointments
-app.get('/appointments', (req, res) => {
-  res.json(appointments);
-});
-
-// Update appointment status
-app.patch('/appointments/:id', (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-  
-  const appointment = appointments.find(a => a.id === id);
-  if (!appointment) {
-    return res.status(404).json({ error: 'Appointment not found' });
+// 2. Get Events from Google Calendar
+app.get('/events', async (req, res) => {
+  try {
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: new Date().toISOString(),
+      maxResults: 10,
+      singleEvents: true,
+      orderBy: 'startTime'
+    });
+    res.json({ events: response.data.items });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get events', details: error });
   }
-  
-  appointment.status = status;
-  res.json(appointment);
 });
 
-app.listen(port, () => {
-  console.log(`Calendar service running on port ${port}`);
+// 3. Create New Event in Google Calendar
+app.post('/events', async (req, res) => {
+  const { summary, start, end, description } = req.body;
+  
+  try {
+    const event = {
+      summary,
+      description,
+      start: {
+        dateTime: start,
+        timeZone: 'America/New_York'
+      },
+      end: {
+        dateTime: end,
+        timeZone: 'America/New_York'
+      }
+    };
+
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: event
+    });
+
+    res.json({ message: 'Event created', event: response.data });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create event', details: error });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Calendar server running on port ${PORT}`);
 });
