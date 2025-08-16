@@ -1,6 +1,13 @@
 import express from 'express';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
+import type {
+  SuggestSlotsRequest,
+  SuggestSlotsResponse,
+  CreateAppointmentRequest,
+  CreateAppointmentResponse
+} from "@upseller/shared";
+import { randomUUID } from "crypto";
 
 dotenv.config();
 
@@ -17,6 +24,16 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+const TZ = process.env.TIMEZONE || "America/Denver";
+
+const addMinutes = (iso: string, mins: number) =>
+  new Date(new Date(iso).getTime() + mins * 60000).toISOString();
+
+const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+  new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
+
+const roundUpToNextHalfHour = (d: Date) =>
+  new Date(Math.ceil((d.getTime() + 1) / (30 * 60 * 1000)) * (30 * 60 * 1000));
 
 // 1. Test Google Account Connection
 app.get('/auth', (req, res) => {
@@ -86,3 +103,94 @@ app.post('/events', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Calendar server running on port ${PORT}`);
 });
+
+app.post<{}, SuggestSlotsResponse | { needsAuth: true; authUrl: string }, SuggestSlotsRequest>(
+  "/suggest-slots",
+  async (req, res) => {
+    const { listing, windowCount = 2, durationMin = 45 } = req.body;
+
+    // require OAuth first
+    const creds: any = (oauth2Client as any).credentials || {};
+    if (!creds.access_token && !creds.refresh_token) {
+      return res.status(401).json({ needsAuth: true, authUrl: "/auth" });
+    }
+
+    // parse seller availability windows
+    const intervals = (listing.availability || [])
+      .map(iv => iv.split("/"))
+      .filter(p => p.length === 2);
+
+    if (intervals.length === 0) return res.json({ suggested: [] });
+
+    // compute overall span for FreeBusy
+    const timeMin = new Date(intervals.map(p => p[0]).sort()[0]).toISOString();
+    const timeMax = new Date(intervals.map(p => p[1]).sort().slice(-1)[0]).toISOString();
+
+    // ask Google when you're busy
+    const fb = await calendar.freebusy.query({
+      requestBody: { timeMin, timeMax, items: [{ id: "primary" }], timeZone: TZ }
+    });
+    const busy = (fb.data.calendars?.primary?.busy ?? []).map(b => ({
+      start: b.start!, end: b.end!
+    }));
+
+    // scan for the first N open slots on a 30-min grid
+    const suggested: string[] = [];
+    const nowPlus30 = roundUpToNextHalfHour(new Date(Date.now() + 30 * 60 * 1000));
+
+    for (const [startIso, endIso] of intervals) {
+      let cur = new Date(Math.max(new Date(startIso).getTime(), nowPlus30.getTime()));
+      const end = new Date(endIso);
+
+      while (cur.getTime() + durationMin * 60000 <= end.getTime()) {
+        const slotStart = cur.toISOString();
+        const slotEnd = addMinutes(slotStart, durationMin);
+        const conflict = busy.some(b => overlaps(slotStart, slotEnd, b.start, b.end));
+        if (!conflict) suggested.push(slotStart);
+        if (suggested.length >= windowCount) return res.json({ suggested });
+        cur = new Date(cur.getTime() + 30 * 60000); // advance 30 min
+      }
+    }
+
+    return res.json({ suggested });
+  }
+);
+
+app.post<{}, CreateAppointmentResponse | { needsAuth: true; authUrl: string }, CreateAppointmentRequest>(
+  "/create-appointment",
+  async (req, res) => {
+    const { listing, buyerId, startIso, spot, durationMin = 45, buyerEmail } = req.body;
+
+    const creds: any = (oauth2Client as any).credentials || {};
+    if (!creds.access_token && !creds.refresh_token) {
+      return res.status(401).json({ needsAuth: true, authUrl: "/auth" });
+    }
+
+    const endIso = addMinutes(startIso, durationMin);
+
+    const resp = await calendar.events.insert({
+      calendarId: "primary",
+      requestBody: {
+        summary: `Marketplace Pickup - ${listing.title}`,
+        location: spot,
+        description: `Payment: ${(listing.paymentMethods || []).join(", ")}`,
+        start: { dateTime: startIso, timeZone: TZ },
+        end:   { dateTime: endIso,   timeZone: TZ },
+        attendees: buyerEmail ? [{ email: buyerEmail }] : []
+      },
+      sendUpdates: "all"
+    });
+
+    return res.json({
+      id: randomUUID(),
+      listingId: listing.id,
+      buyerId,
+      startIso,
+      endIso,
+      spot,
+      status: "confirmed",
+      eventId: resp.data.id ?? undefined,
+      htmlLink: resp.data.htmlLink ?? undefined,
+    });
+  }
+);
