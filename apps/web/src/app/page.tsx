@@ -1,47 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Thread, apiClient } from '@/lib/api';
-import ThreadList from '@/components/ThreadList';
-import ChatPanel from '@/components/ChatPanel';
+import { apiClient } from '@/lib/api';
 import ListingForm from '@/components/ListingForm';
+import ChatInterface from '@/components/ChatInterface';
+import { Listing } from '@upseller/shared';
 
 export default function Home() {
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
-  const [mode, setMode] = useState<'mock' | 'shadow'>('mock');
+  const [currentListing, setCurrentListing] = useState<Listing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadThreads();
+    loadCurrentListing();
   }, []);
 
-  const loadThreads = async () => {
+  const loadCurrentListing = async () => {
     setIsLoading(true);
     try {
-      const response = await apiClient.getThreads();
+      const response = await apiClient.getCurrentListing();
       if (response.data) {
-        setThreads(response.data);
-        if (response.data.length > 0 && !selectedThread) {
-          setSelectedThread(response.data[0]);
-        }
+        setCurrentListing(response.data);
       }
     } catch (error) {
-      console.error('Failed to load threads:', error);
+      console.error('Failed to load current listing:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleModeChange = async (newMode: 'mock' | 'shadow') => {
-    try {
-      const response = await apiClient.setMode(newMode);
-      if (response.data) {
-        setMode(newMode);
-      }
-    } catch (error) {
-      console.error('Failed to set mode:', error);
-    }
+  const handleListingCreated = () => {
+    loadCurrentListing();
   };
 
   if (isLoading) {
@@ -49,7 +37,7 @@ export default function Home() {
       <div className="h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading conversations...</p>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -62,57 +50,35 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900">
-              🤖 Upseller AI Assistant
+              🤖 Marketplace Seller AI
             </h1>
             <span className="text-sm text-gray-500">
-              Facebook Marketplace Automation
+              Demo Chat Interface
             </span>
           </div>
           
           <div className="flex items-center space-x-4">
-            <ListingForm onListingCreated={loadThreads} />
+            <ListingForm onListingCreated={handleListingCreated} />
             
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-700">Mode:</label>
-              <select
-                value={mode}
-                onChange={(e) => handleModeChange(e.target.value as 'mock' | 'shadow')}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="mock">Mock</option>
-                <option value="shadow">Shadow</option>
-              </select>
-            </div>
-            
-            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-              mode === 'mock' 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-orange-100 text-orange-800'
-            }`}>
-              {mode.toUpperCase()} MODE
-            </div>
+            {currentListing && (
+              <div className="text-sm text-gray-600">
+                Selling: <span className="font-medium">{currentListing.title}</span> - ${currentListing.listPrice}
+              </div>
+            )}
           </div>
         </div>
         
         <div className="mt-2 text-sm text-gray-600">
-          {mode === 'mock' 
-            ? '🎭 Mock mode: AI responses are simulated' 
-            : '👥 Shadow mode: AI drafts replies but requires human approval'
+          {currentListing 
+            ? '💬 Chat with the AI about your item. Try asking questions, making offers, or scheduling a pickup!' 
+            : '📝 Create a listing to start chatting with the AI seller assistant'
           }
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        <ThreadList
-          threads={threads}
-          selectedThread={selectedThread}
-          onSelectThread={setSelectedThread}
-        />
-        <ChatPanel
-          selectedThread={selectedThread}
-          mode={mode}
-        />
+      <div className="flex-1 overflow-hidden">
+        <ChatInterface listing={currentListing} />
       </div>
     </div>
   );
