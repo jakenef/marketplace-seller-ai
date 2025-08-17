@@ -1,13 +1,11 @@
-import { BuyerMessage, DraftReply, Listing } from '@upseller/shared';
+import { Listing } from '@upseller/shared';
 
 const MASTER_BASE_URL = process.env.NEXT_PUBLIC_MASTER_BASE_URL || 'http://localhost:4000';
 
-export interface Thread {
-  id: string;
-  name: string;
-  lastMessage: string;
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: string;
-  messages: BuyerMessage[];
 }
 
 export interface ApiResponse<T> {
@@ -44,15 +42,25 @@ class ApiClient {
     }
   }
 
-  async getThreads(): Promise<ApiResponse<Thread[]>> {
-    return this.request<Thread[]>('/threads');
+  async sendChatMessage(message: string): Promise<ApiResponse<{ response: string }>> {
+    return this.request<{ response: string }>('/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
   }
 
-  async processMessage(message: BuyerMessage): Promise<ApiResponse<DraftReply>> {
-    return this.request<DraftReply>('/ingest/message', {
-      method: 'POST',
-      body: JSON.stringify(message),
+  async getChatHistory(): Promise<ApiResponse<ChatMessage[]>> {
+    return this.request<ChatMessage[]>('/chat/history');
+  }
+
+  async clearChatHistory(): Promise<ApiResponse<{ ok: boolean }>> {
+    return this.request<{ ok: boolean }>('/chat/history', {
+      method: 'DELETE',
     });
+  }
+
+  async getCurrentListing(): Promise<ApiResponse<Listing | null>> {
+    return this.request<Listing | null>('/listing');
   }
 
   async createListing(listing: Omit<Listing, 'id'>): Promise<ApiResponse<{ ok: boolean }>> {
@@ -67,10 +75,10 @@ class ApiClient {
     });
   }
 
-  async setMode(mode: 'mock' | 'shadow'): Promise<ApiResponse<{ mode: string }>> {
-    return this.request<{ mode: string }>('/mode', {
+  async scheduleAppointment(timeSlot: string, spot?: string, buyerEmail?: string): Promise<ApiResponse<{ appointment: any; message: string }>> {
+    return this.request<{ appointment: any; message: string }>('/schedule', {
       method: 'POST',
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ timeSlot, spot, buyerEmail }),
     });
   }
 
