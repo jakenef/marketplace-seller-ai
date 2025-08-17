@@ -1,6 +1,10 @@
 # Upseller - AI Assistant for Facebook Marketplace Sellers
 
-An AI-powered assistant that helps Facebook Marketplace sellers handle inbound buyer messages, negotiate within seller constraints, propose meeting times/locations, and generate calendar invites. The system uses Mastra for AI agent orchestration and operates in shadow mode (browser automation only drafts replies; humans click Send).
+An AI-powered assistant that helps Facebook Marketplace sellers handle inbound buyer messages, negotiate within seller constraints, propose meeting times/locations, and generate calendar invites. The system uses Mastra for AI agent orchestration.
+
+<img width="1714" height="1038" alt="Screenshot 2025-08-16 at 5 43 08 PM" src="https://github.com/user-attachments/assets/9639a9b4-c564-49d5-96d5-9b7fca105fb2" />
+<img width="1728" height="1104" alt="Screenshot 2025-08-16 at 4 51 15 PM" src="https://github.com/user-attachments/assets/567b6977-ca21-4468-a877-f471e21bbd6d" />
+
 
 ## 🏗️ Architecture
 
